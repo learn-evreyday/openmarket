@@ -1,0 +1,24 @@
+[
+  {
+    "id": "comment_visible_seed",
+    "product_id": "product_lamp_seed",
+    "user_id": "user_customer_seed",
+    "content": "Beautiful light spread and a solid base. It feels premium on a small desk.",
+    "rating": 5,
+    "status": "visible",
+    "moderation_note": "",
+    "created_at": "2026-04-10T14:10:20.038Z",
+    "updated_at": "2026-04-10T14:10:20.038Z"
+  },
+  {
+    "id": "comment_pending_seed",
+    "product_id": "product_candles_seed",
+    "user_id": "user_customer_seed",
+    "content": "I like the scent but the glass lid felt lighter than expected. Curious about the refill plan.",
+    "rating": 3,
+    "status": "pending_review",
+    "moderation_note": "",
+    "created_at": "2026-04-10T14:10:20.038Z",
+    "updated_at": "2026-04-10T14:10:20.038Z"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "log_6a3d340fb49f",
+    "actor_id": "user_super_admin_seed",
+    "actor_role": "super_admin",
+    "action": "user.logged_in",
+    "entity_type": "user",
+    "entity_id": "user_super_admin_seed",
+    "details": {},
+    "created_at": "2026-04-10T14:10:40.449Z"
+  },
+  {
+    "id": "log_2ccada87e5b1",
+    "actor_id": "user_vendor_seed",
+    "actor_role": "vendor",
+    "action": "user.logged_in",
+    "entity_type": "user",
+    "entity_id": "user_vendor_seed",
+    "details": {},
+    "created_at": "2026-04-10T14:10:22.191Z"
+  },
+  {
+    "id": "log_034d1d8abee8",
+    "actor_id": "user_super_admin_seed",
+    "actor_role": "super_admin",
+    "action": "seed.initialized",
+    "entity_type": "system",
+    "entity_id": "openmarket",
+    "details": {
+      "note": "Initial marketplace seed data was generated."
+    },
+    "created_at": "2026-04-10T14:10:20.038Z"
+  },
+  {
+    "id": "log_cc4427f3c026",
+    "actor_id": "user_vendor_seed",
+    "actor_role": "vendor",
+    "action": "product.removal_requested",
+    "entity_type": "product_removal_request",
+    "entity_id": "removal_request_seed",
+    "details": {
+      "product_id": "product_prints_seed"
+    },
+    "created_at": "2026-04-10T14:10:20.038Z"
+  }
+]

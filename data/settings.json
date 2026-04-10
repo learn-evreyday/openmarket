@@ -1,0 +1,12 @@
+{
+  "site_name": "OpenMarket",
+  "tagline": "Independent makers, moderated trust, and seasonal drops with clear lifecycle rules.",
+  "support_email": "support@openmarket.local",
+  "featured_categories": [
+    "Home Studio",
+    "Seasonal Drops",
+    "Maker Tools"
+  ],
+  "seasonal_policy": "Seasonal products automatically become unavailable after their end date.",
+  "updated_at": "2026-04-10T14:10:20.038Z"
+}

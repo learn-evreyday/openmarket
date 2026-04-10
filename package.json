@@ -1,0 +1,13 @@
+{
+  "name": "openmarket",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenMarket multi-vendor marketplace with role-based workflows and zero external dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
