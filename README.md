@@ -1,407 +1,478 @@
 # OpenMarket
 
-OpenMarket is a self-contained multi-vendor marketplace demo built from the supplied plan. The application is written entirely in English and implements the core business rules requested for the project:
+OpenMarket is a fully English multi-vendor marketplace demo built around four clearly separated layers:
 
-- customer accounts
-- vendor access requests with two-step approval
-- vendor product management
-- permanent and seasonal products
-- comment moderation
-- complaint handling
-- admin and super admin control layers
-- audit logging
+- frontend SPA in [static/app.js](/D:/Codex/sites/Openmarket/static/app.js)
+- HTTP/API server in [src/server/app.js](/D:/Codex/sites/Openmarket/src/server/app.js)
+- business logic and authorization in [src/services/marketplace.js](/D:/Codex/sites/Openmarket/src/services/marketplace.js)
+- PostgreSQL schema and bootstrap in [sql/schema.sql](/D:/Codex/sites/Openmarket/sql/schema.sql), [src/db/bootstrap.js](/D:/Codex/sites/Openmarket/src/db/bootstrap.js), and [src/db/client.js](/D:/Codex/sites/Openmarket/src/db/client.js)
 
-## Technology and Database
+The runtime entry used by `npm start` is [src/server/start.js](/D:/Codex/sites/Openmarket/src/server/start.js).
 
-The current implementation does **not** use an external SQL or NoSQL server.
+## Core Architecture
 
-It uses:
+### Frontend
 
-- `Node.js` standard library only
-- static frontend files: HTML, CSS, and vanilla JavaScript
-- JSON file storage in [`data/`](/D:/Codex/sites/Openmarket/data)
+- Single-page application with client-side routing
+- Every UI string is in English
+- All pages talk to the backend through JSON API routes
+- Role-aware navigation and role-aware dashboard content
 
-### Current storage model
+### Backend
 
-OpenMarket currently uses the JSON files inside `data/` as a lightweight local database. Each file acts like a logical table or collection.
+- Native Node.js HTTP server
+- Protected routes validate both session and role on the server
+- Multi-step workflows are enforced in backend logic, not only in the UI
+- Important actions write to the audit log
 
-This approach is useful for:
+### Database
 
-- local development
-- simple deployment
-- zero external dependencies
-- easy seeding of demo data
+- External SQL database: PostgreSQL
+- PostgreSQL is the only source of truth at runtime
+- No in-memory cache, JSON file, or mock collection is used for live application logic
+- On first boot, the app applies the SQL schema and inserts demo seed data only if the database is empty
+- Legacy JSON files in [`data/`](/D:/Codex/sites/Openmarket/data) are not used by the current runtime
 
-If the project is later migrated to PostgreSQL, MySQL, SQLite, or MongoDB, the current JSON collections already map cleanly to a database schema.
+### Authorization
 
-## Logical Table Structure
+- Persistent sessions stored in the `user_sessions` table
+- Passwords hashed with PBKDF2 before storage
+- Role checks centralized in [src/auth/access.js](/D:/Codex/sites/Openmarket/src/auth/access.js)
+- Session token hashing handled in [src/auth/sessions.js](/D:/Codex/sites/Openmarket/src/auth/sessions.js)
 
-Below is the logical data model used by the current app.
+## Roles
 
-### `users`
+### `customer`
 
-Stores all accounts in the system.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique user ID |
-| `email` | string | Login identity |
-| `display_name` | string | Public name shown in the UI |
-| `password_hash` | string | PBKDF2 password hash |
-| `provider` | string | Current value is `local` |
-| `role` | string | `customer`, `vendor`, `moderator`, `admin`, `super_admin` |
-| `status` | string | `active` or `suspended` |
-| `bio` | string | Profile description |
-| `company` | string | Vendor or organization name |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `products`
-
-Stores product listings created by vendors.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique product ID |
-| `vendor_id` | string | Owner user ID |
-| `title` | string | Product title |
-| `slug` | string | URL-friendly identifier |
-| `summary` | string | Short product summary |
-| `description` | string | Full product description |
-| `price` | number | Product price |
-| `currency` | string | Currently `USD` |
-| `stock` | number | Integer quantity |
-| `category` | string | Product category |
-| `status` | string | `draft`, `published`, `pending_review`, `unavailable`, `removed` |
-| `product_type` | string | `permanent` or `seasonal` |
-| `available_from` | string/null | Start date for seasonal products |
-| `available_until` | string/null | End date for seasonal products |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `vendor_requests`
-
-Stores requests sent by customers who want to become vendors.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique request ID |
-| `user_id` | string | Customer who requested vendor access |
-| `status` | string | `pending_admin_review`, `pending_super_admin_review`, `approved`, `rejected_by_admin`, `rejected_by_super_admin` |
-| `reason` | string | Request justification |
-| `admin_review` | object/null | First-stage decision |
-| `super_admin_review` | object/null | Final decision |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `product_removal_requests`
-
-Stores vendor requests for product removal.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique request ID |
-| `product_id` | string | Product requested for removal |
-| `vendor_id` | string | Vendor who owns the product |
-| `status` | string | Same approval lifecycle as vendor requests |
-| `reason` | string | Removal explanation |
-| `admin_review` | object/null | First review |
-| `super_admin_review` | object/null | Final review |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `comments`
-
-Stores customer comments and reviews on products.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique comment ID |
-| `product_id` | string | Linked product |
-| `user_id` | string | Comment author |
-| `content` | string | Review text |
-| `rating` | number | 1 to 5 |
-| `status` | string | `visible`, `hidden`, `pending_review`, `rejected` |
-| `moderation_note` | string | Optional moderator note |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `complaints`
-
-Stores reports about products, comments, or users.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique complaint ID |
-| `reporter_id` | string | User who submitted the complaint |
-| `target_type` | string | `product`, `comment`, or `user` |
-| `target_id` | string | Linked entity ID |
-| `reason` | string | Short complaint title |
-| `details` | string | Complaint explanation |
-| `status` | string | `open`, `resolved`, `rejected`, `escalated_to_admin` |
-| `reviewer_id` | string/null | Moderator who handled it |
-| `resolution_note` | string | Decision or escalation note |
-| `created_at` | string | ISO timestamp |
-| `updated_at` | string | ISO timestamp |
-
-### `activity_logs`
-
-Stores audit events across the platform.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Unique log ID |
-| `actor_id` | string/null | User who performed the action |
-| `actor_role` | string | Role or `system` |
-| `action` | string | Event key such as `product.created` |
-| `entity_type` | string | Related domain type |
-| `entity_id` | string | Related entity ID |
-| `details` | object | Additional context |
-| `created_at` | string | ISO timestamp |
-
-### `settings`
-
-Stores global application settings.
-
-Important fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `site_name` | string | Branding name |
-| `tagline` | string | Global site message |
-| `support_email` | string | Support contact |
-| `featured_categories` | array | Categories highlighted by the platform |
-| `seasonal_policy` | string | Seasonal product rule text |
-| `updated_at` | string | ISO timestamp |
-
-### Optional collections included for future growth
-
-- `shopping_lists`
-- `events`
-
-They exist as placeholders in the current storage layer, but they are not yet core UI features.
-
-## Roles in the System
-
-The platform currently supports five roles:
-
-### Customer
-
-Can:
-
-- register and log in
-- browse products
-- submit comments
+- register, login, logout
+- update profile
+- browse the catalog
+- open a product page
+- submit comments and reviews
 - submit complaints
 - request vendor access
 
-### Vendor
+### `vendor`
 
-Can:
-
+- see only own vendor inventory in the vendor hub
 - create products
-- edit owned products
-- publish or keep products in draft
-- create seasonal listings
+- edit own products
 - request product removal
-- view feedback related to products
+- cannot directly delete published products
 
-Cannot:
+### `moderator`
 
-- delete products directly
-
-### Moderator
-
-Can:
-
-- review comments
+- review pending comments
 - make comments visible, hidden, or rejected
 - review complaints
-- resolve, reject, or escalate complaints
+- resolve, reject, or escalate complaints to admin
 
-### Admin
+### `admin`
 
-Can:
-
-- review vendor access requests at stage 1
-- review product removal requests at stage 1
-- manage user status
+- manage user active or suspended status
+- first-stage review for vendor requests
+- first-stage review for product removal requests
+- review escalated complaints
 - view marketplace statistics
 
-### Super Admin
+### `super_admin`
 
-Can:
-
-- finalize vendor access requests
-- finalize product removal requests
+- final-stage approval for vendor requests
+- final-stage approval for product removal requests
+- manage global settings
 - change user roles
-- change global settings
-- review the audit log
+- inspect the full audit log
 
-## Business Rules Implemented
+## Business Workflows
 
-- A user does not become a vendor directly.
-- Vendor access always starts as a request.
-- Vendor requests require admin review first and super admin approval second.
-- Vendors cannot delete products directly.
-- Product removal is request-based and moves through two approval stages.
-- A product requested for removal becomes `unavailable` while the request is under review.
-- Seasonal products automatically become `unavailable` after `available_until`.
-- Comments enter moderation flow through `pending_review`.
-- Complaints can target products, comments, or users.
-- Important actions are written into the audit log.
+### Vendor access workflow
 
-## Application Pages
+1. A `customer` submits a vendor request.
+2. The request enters `pending_admin_review`.
+3. `admin` approves or rejects the first stage.
+4. If approved, the request moves to `pending_super_admin_review`.
+5. `super_admin` makes the final decision.
+6. Only after final approval does the user role become `vendor`.
 
-The frontend is a single-page application with route-based views.
+### Product removal workflow
 
-### Public routes
+1. A `vendor` requests removal for a published product.
+2. The product becomes immediately `unavailable`.
+3. `admin` performs the first review.
+4. If approved, the request moves to `pending_super_admin_review`.
+5. `super_admin` makes the final decision.
+6. Final approval sets the product to `removed`.
+7. Final or first-stage rejection restores the product to `published`.
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/` | Public | Landing page, project overview, business rules, quick explanation of roles, seeded demo account information |
-| `/login` | Public | Login form for existing accounts |
-| `/register` | Public | Registration form for new customer accounts |
+### Seasonal availability workflow
 
-### Authenticated routes
+- Products support `permanent` and `seasonal`
+- Seasonal products store:
+  - `seasonal_window`
+  - `available_from`
+  - `available_until`
+- PostgreSQL validates the seasonal classification:
+  - `one_to_three_months`
+  - `three_to_five_months`
+- Expired seasonal products are automatically marked `unavailable`
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/dashboard` | Authenticated | Role-aware dashboard, marketplace metrics, recent products, recent activity |
-| `/profile` | Authenticated | Profile form, account details, personal comments, complaints, and vendor request section for customers |
-| `/products` | Authenticated | Product catalog, category filters, permanent vs seasonal filtering |
-| `/products/:id` | Authenticated | Product detail, comments, complaint actions, comment submission form |
+## PostgreSQL Database
 
-### Vendor routes
+Configuration example lives in [.env.example](/D:/Codex/sites/Openmarket/.env.example):
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/vendor/products` | Vendor | Vendor product list, edit shortcuts, product removal request actions, vendor removal request history |
-| `/vendor/add-product` | Vendor | Product creation form |
-| `/vendor/add-product?edit=:id` | Vendor | Product edit mode using the same form |
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/openmarket
+PGSSLMODE=disable
+PORT=8000
+```
 
-### Moderator routes
+### Schema design
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/moderator/complaints` | Moderator | Complaint review queue with resolve, reject, and escalate actions |
-| `/moderator/comments` | Moderator | Comment moderation queue with visible, hidden, and rejected decisions |
+The schema uses:
 
-### Admin routes
+- UUID primary keys for core entities
+- PostgreSQL enum types for roles, statuses, product types, complaint targets, and review states
+- `TIMESTAMPTZ` for audit and lifecycle fields
+- `DATE` for seasonal windows
+- foreign keys with explicit delete behavior
+- database-level check constraints for seasonal duration validity
+- useful indexes for email, slug, statuses, joins, and logs
+- partial unique indexes to block duplicate open vendor or product removal requests
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/admin/users` | Admin | User list, roles, status, activate/suspend actions |
-| `/admin/vendor-requests` | Admin | Stage 1 vendor request approval queue |
-| `/admin/product-removals` | Admin | Stage 1 product removal approval queue |
-| `/admin/stats` | Admin | Marketplace statistics, product breakdown, recent logs |
+### Main tables
 
-### Super Admin routes
+#### `users`
 
-| Route | Access | What the page contains |
-|---|---|---|
-| `/super-admin/settings` | Super Admin | Global settings form, final vendor request queue, final product removal queue, role management |
-| `/super-admin/audit` | Super Admin | Full audit log view |
+- purpose: accounts, roles, and profile data
+- key fields:
+  - `id UUID PRIMARY KEY`
+  - `email TEXT NOT NULL`
+  - `display_name TEXT NOT NULL`
+  - `password_hash TEXT NOT NULL`
+  - `role app_role NOT NULL`
+  - `status user_account_status NOT NULL`
+  - `bio TEXT`
+  - `company TEXT`
+  - `created_at TIMESTAMPTZ`
+  - `updated_at TIMESTAMPTZ`
+- indexes:
+  - unique index on `LOWER(email)`
+  - role index
+  - status index
+
+#### `products`
+
+- purpose: marketplace listings
+- key fields:
+  - `id UUID PRIMARY KEY`
+  - `vendor_id UUID REFERENCES users(id)`
+  - `title TEXT`
+  - `slug TEXT UNIQUE`
+  - `summary TEXT`
+  - `description TEXT`
+  - `price NUMERIC(12,2)`
+  - `stock INTEGER`
+  - `category TEXT`
+  - `status product_status`
+  - `product_type product_type`
+  - `seasonal_window seasonal_window`
+  - `available_from DATE`
+  - `available_until DATE`
+  - `created_at TIMESTAMPTZ`
+  - `updated_at TIMESTAMPTZ`
+- validation:
+  - permanent products cannot store seasonal fields
+  - seasonal products must store all seasonal fields
+  - seasonal dates must fit the selected classification
+
+#### `vendor_requests`
+
+- purpose: two-stage customer to vendor approval flow
+- key fields:
+  - `user_id`
+  - `status`
+  - `reason`
+  - `reviewed_by_admin`
+  - `admin_note`
+  - `admin_reviewed_at`
+  - `reviewed_by_super_admin`
+  - `super_admin_note`
+  - `super_admin_reviewed_at`
+- indexes:
+  - user index
+  - status index
+  - partial unique index for open requests
+
+#### `product_removal_requests`
+
+- purpose: two-stage product removal workflow
+- key fields:
+  - `product_id`
+  - `vendor_id`
+  - `status`
+  - `reason`
+  - admin and super admin review fields
+- indexes:
+  - product index
+  - vendor index
+  - status index
+  - partial unique index for open requests
+
+#### `comments`
+
+- purpose: product reviews and moderated comments
+- key fields:
+  - `product_id`
+  - `user_id`
+  - `content`
+  - `rating`
+  - `status`
+  - `moderation_note`
+  - `reviewed_by`
+  - timestamps
+
+#### `complaints`
+
+- purpose: reports against products, comments, or users
+- key fields:
+  - `reporter_id`
+  - `target_type`
+  - `target_product_id`
+  - `target_comment_id`
+  - `target_user_id`
+  - `reason`
+  - `details`
+  - `status`
+  - `reviewer_id`
+  - `resolution_note`
+  - timestamps
+- validation:
+  - exactly one target foreign key must be filled, depending on `target_type`
+
+#### `user_sessions`
+
+- purpose: persistent login sessions
+- key fields:
+  - `user_id`
+  - `token_hash`
+  - `expires_at`
+  - `last_seen_at`
+
+#### `activity_logs`
+
+- purpose: audit log for important actions
+- key fields:
+  - `actor_user_id`
+  - `actor_role`
+  - `action`
+  - `entity_type`
+  - `entity_id`
+  - `metadata JSONB`
+  - `created_at TIMESTAMPTZ`
+- indexes:
+  - created-at descending index
+  - actor index
+  - entity index
+  - action index
+
+#### `global_settings`
+
+- purpose: site-wide settings controlled by `super_admin`
+- key fields:
+  - `site_name`
+  - `tagline`
+  - `support_email`
+  - `featured_categories JSONB`
+  - `seasonal_policy`
+  - `updated_at`
+
+## Pages
+
+### Public pages
+
+- `/`
+  - landing page
+  - marketplace rules summary
+  - roles overview
+  - demo account list
+- `/login`
+  - login form
+- `/register`
+  - customer registration form
+
+### Authenticated pages
+
+- `/dashboard`
+  - role-aware metrics
+  - recent products
+  - recent audit snapshot
+- `/profile`
+  - profile form
+  - own comments
+  - own complaints
+  - vendor request card or form for customers
+- `/products`
+  - product catalog
+  - category filter
+  - product type filter
+- `/products/:id`
+  - product details
+  - seasonal window information
+  - unavailable message when relevant
+  - comment form
+  - complaint buttons for product, vendor, comment, and comment author
+
+### Vendor pages
+
+- `/vendor/products`
+  - own products list
+  - edit actions
+  - removal request actions
+  - removal request history
+- `/vendor/add-product`
+  - create product form
+- `/vendor/add-product?edit=:id`
+  - edit existing product
+  - includes seasonal classification and date range
+
+### Moderator pages
+
+- `/moderator/comments`
+  - pending comment queue
+  - visible, hidden, rejected actions
+- `/moderator/complaints`
+  - open complaint queue
+  - resolve, reject, escalate actions
+
+### Admin pages
+
+- `/admin/users`
+  - activate or suspend users
+- `/admin/vendor-requests`
+  - first-stage vendor approval queue
+- `/admin/product-removals`
+  - first-stage product removal queue
+- `/admin/escalated-complaints`
+  - escalated cases from moderators
+  - final admin resolve or reject actions
+- `/admin/stats`
+  - marketplace totals
+  - product breakdown
+  - recent log entries
+
+### Super admin pages
+
+- `/super-admin/settings`
+  - global settings form
+  - final vendor approvals
+  - final product removal approvals
+  - role management table
+- `/super-admin/audit`
+  - full audit log
 
 ## API Routes
 
-Yes. The application already includes API routes and the frontend uses them directly.
+### Authentication
 
-### Authentication API
+- `GET /api/session`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/session` | Returns current session state |
-| `POST` | `/api/auth/register` | Creates a new customer account |
-| `POST` | `/api/auth/login` | Logs in a user |
-| `POST` | `/api/auth/logout` | Logs out a user |
+### Profile and dashboard
 
-### General authenticated API
+- `GET /api/dashboard`
+- `GET /api/profile`
+- `POST /api/profile`
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/dashboard` | Returns dashboard data |
-| `GET` | `/api/profile` | Returns profile data |
-| `POST` | `/api/profile` | Updates profile data |
-| `GET` | `/api/products` | Returns catalog products |
-| `GET` | `/api/products/:id` | Returns product detail data |
-| `POST` | `/api/products/:id/comment` | Creates a moderated product comment |
-| `POST` | `/api/complaints` | Creates a complaint |
+### Products and comments
 
-### Vendor API
+- `GET /api/products`
+- `GET /api/products/:id`
+- `POST /api/products`
+- `POST /api/products/:id/update`
+- `POST /api/products/:id/comment`
+- `POST /api/products/:id/removal-request`
 
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/vendor/request-access` | Customer requests vendor access |
-| `GET` | `/api/vendor/products` | Returns vendor-owned products and removal history |
-| `POST` | `/api/products` | Creates a new product |
-| `POST` | `/api/products/:id/update` | Updates a product |
-| `POST` | `/api/products/:id/removal-request` | Creates a product removal request |
+### Complaints
 
-### Moderator API
+- `POST /api/complaints`
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/moderator/comments` | Returns comment moderation queue |
-| `POST` | `/api/moderator/comments/:id/review` | Saves comment moderation decision |
-| `GET` | `/api/moderator/complaints` | Returns complaint queue |
-| `POST` | `/api/moderator/complaints/:id/review` | Resolves, rejects, or escalates a complaint |
+### Vendor access
 
-### Admin API
+- `POST /api/vendor/request-access`
+- `GET /api/vendor/products`
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/admin/users` | Returns user management data |
-| `POST` | `/api/admin/users/:id/status` | Activates or suspends a user |
-| `GET` | `/api/admin/vendor-requests` | Returns stage 1 vendor request queue |
-| `POST` | `/api/admin/vendor-requests/:id/review` | Approves or rejects vendor request at admin stage |
-| `GET` | `/api/admin/product-removals` | Returns stage 1 removal queue |
-| `POST` | `/api/admin/product-removals/:id/review` | Approves or rejects removal request at admin stage |
-| `GET` | `/api/admin/stats` | Returns stats and logs |
+### Moderator actions
 
-### Super Admin API
+- `GET /api/moderator/comments`
+- `POST /api/moderator/comments/:id/review`
+- `GET /api/moderator/complaints`
+- `POST /api/moderator/complaints/:id/review`
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/super-admin/settings` | Returns settings, role data, and final approval queues |
-| `POST` | `/api/super-admin/settings` | Updates global settings |
-| `POST` | `/api/super-admin/users/:id/role` | Changes a user role |
-| `POST` | `/api/super-admin/vendor-requests/:id/finalize` | Final approval or rejection of vendor request |
-| `POST` | `/api/super-admin/product-removals/:id/finalize` | Final approval or rejection of product removal |
-| `GET` | `/api/super-admin/audit` | Returns the audit log |
+### Admin actions
 
-## Project Files
+- `GET /api/admin/users`
+- `POST /api/admin/users/:id/status`
+- `GET /api/admin/vendor-requests`
+- `POST /api/admin/vendor-requests/:id/review`
+- `GET /api/admin/product-removals`
+- `POST /api/admin/product-removals/:id/review`
+- `GET /api/admin/escalated-complaints`
+- `POST /api/admin/complaints/:id/review`
+- `GET /api/admin/stats`
 
-Main files:
+### Super admin actions
 
-- [server.js](/D:/Codex/sites/Openmarket/server.js) - backend server, routing, storage, business logic
-- [static/index.html](/D:/Codex/sites/Openmarket/static/index.html) - main HTML shell
-- [static/style.css](/D:/Codex/sites/Openmarket/static/style.css) - styling
-- [static/app.js](/D:/Codex/sites/Openmarket/static/app.js) - frontend router and UI logic
-- [data/](/D:/Codex/sites/Openmarket/data) - JSON storage
-- [package.json](/D:/Codex/sites/Openmarket/package.json) - package metadata
+- `GET /api/super-admin/settings`
+- `POST /api/super-admin/settings`
+- `POST /api/super-admin/users/:id/role`
+- `POST /api/super-admin/vendor-requests/:id/finalize`
+- `POST /api/super-admin/product-removals/:id/finalize`
+- `GET /api/super-admin/audit`
 
-## Run Locally
+## Project Structure
+
+- [package.json](/D:/Codex/sites/Openmarket/package.json)
+  - npm scripts and dependencies
+- [src/server/start.js](/D:/Codex/sites/Openmarket/src/server/start.js)
+  - runtime bootstrap used by `npm start`
+- [src/server/app.js](/D:/Codex/sites/Openmarket/src/server/app.js)
+  - HTTP routing and SPA/static serving
+- [src/services/marketplace.js](/D:/Codex/sites/Openmarket/src/services/marketplace.js)
+  - business rules, SQL calls, audit logging, role checks
+- [src/db/client.js](/D:/Codex/sites/Openmarket/src/db/client.js)
+  - PostgreSQL pool and transactions
+- [src/db/bootstrap.js](/D:/Codex/sites/Openmarket/src/db/bootstrap.js)
+  - schema apply plus initial seeding
+- [src/db/seed.js](/D:/Codex/sites/Openmarket/src/db/seed.js)
+  - demo bootstrap records
+- [src/auth/passwords.js](/D:/Codex/sites/Openmarket/src/auth/passwords.js)
+  - PBKDF2 password hashing
+- [src/auth/sessions.js](/D:/Codex/sites/Openmarket/src/auth/sessions.js)
+  - session token generation and hashing
+- [sql/schema.sql](/D:/Codex/sites/Openmarket/sql/schema.sql)
+  - PostgreSQL schema, enums, constraints, indexes
+- [static/index.html](/D:/Codex/sites/Openmarket/static/index.html)
+  - SPA shell
+- [static/style.css](/D:/Codex/sites/Openmarket/static/style.css)
+  - styling
+- [static/app.js](/D:/Codex/sites/Openmarket/static/app.js)
+  - frontend router, rendering, and API integration
+
+## Local Run
+
+1. Create a PostgreSQL database.
+2. Copy [.env.example](/D:/Codex/sites/Openmarket/.env.example) to your local environment.
+3. Set `DATABASE_URL`.
+4. Run:
 
 ```bash
+npm install
 npm start
 ```
 
-Default local URL:
+Default local address:
 
 ```text
 http://localhost:8000
@@ -409,13 +480,11 @@ http://localhost:8000
 
 ## Demo Accounts
 
-All seeded demo accounts use the same password:
+All seeded demo accounts use:
 
 ```text
 OpenMarket123!
 ```
-
-Available seeded accounts:
 
 - `customer@openmarket.local`
 - `vendor@openmarket.local`
@@ -423,9 +492,12 @@ Available seeded accounts:
 - `admin@openmarket.local`
 - `superadmin@openmarket.local`
 
-## Final Notes
+Extra seeded records also exist for vendor-request and final-approval queues.
 
-- The whole application is in English.
-- The current database layer is JSON-file based.
-- The logical schema is already structured well enough for a future SQL migration.
-- The API layer already exists and is active in the current implementation.
+## Important Notes
+
+- The entire interface is in English.
+- Runtime persistence is PostgreSQL-only.
+- Security checks are enforced in backend routes.
+- Seasonal rules, request workflows, and complaint workflows are persisted and auditable.
+- Audit logging is part of the main application flow, not an afterthought.
