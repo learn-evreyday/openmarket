@@ -1,0 +1,16 @@
+{
+  "name": "openmarket",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenMarket SQL operations portal backed by the marketonline PostgreSQL schema.",
+  "main": "src/server/start.js",
+  "scripts": {
+    "start": "node src/server/start.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
+  }
+}

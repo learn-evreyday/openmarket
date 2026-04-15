@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenMarket</title>
+    <meta
+      name="description"
+      content="OpenMarket is a marketplace for browsing products, managing your account, and accessing your orders."
+    />
+    <link rel="stylesheet" href="/static/style.v2.css" />
+  </head>
+  <body>
+    <div class="backdrop backdrop-one"></div>
+    <div class="backdrop backdrop-two"></div>
+
+    <div class="site-shell">
+      <header class="topbar">
+        <a href="/" class="brand" data-link>
+          <div class="brand-mark">OM</div>
+          <div>
+            <div class="eyebrow">Marketplace</div>
+            <div class="brand-title">OpenMarket</div>
+          </div>
+        </a>
+
+        <nav id="site-nav" class="site-nav" aria-label="Primary"></nav>
+        <div id="site-actions" class="site-actions"></div>
+      </header>
+
+      <div id="banner" class="banner" hidden></div>
+      <main id="app" class="app-stage"></main>
+
+    </div>
+
+    <script src="/static/marketonline.js"></script>
+  </body>
+</html>

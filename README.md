@@ -15,6 +15,7 @@ For the complete project specification, architecture plan, and scope details, se
 
 ## Main Features
 
+- client registration with automatic `client` role assignment
 - product catalog management
 - customer management
 - order creation with multiple order lines
@@ -51,6 +52,7 @@ For the complete project specification, architecture plan, and scope details, se
 ## Application Pages
 
 - `/` - overview dashboard
+- `/account` - client account home
 - `/products` - product management
 - `/customers` - customer management
 - `/orders` - order management
@@ -58,9 +60,16 @@ For the complete project specification, architecture plan, and scope details, se
 - `/employees` - employee, leave, and resignation management
 - `/service` - service case management
 - `/finance` - expense and profitability reporting
+- `/stock-access` - restricted stock verification workspace
 
 ## API Endpoints
 
+- `GET /api/session`
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `POST /api/auth/logout`
+- `POST /api/stock-access/login`
+- `GET /api/stock-check`
 - `GET /api/overview`
 - `GET /api/products`
 - `POST /api/products`
@@ -85,6 +94,9 @@ For the complete project specification, architecture plan, and scope details, se
 
 - the app applies `sql/schema.sql` if the `customers` table does not already exist
 - the app seeds demo data only when the database is empty
+- the app creates employee login accounts with unique passwords and unique stock access codes
+- new self-registered users are created with the `client` role
+- bootstrap credentials are written only to `runtime/initial-access.json`, never to the frontend
 - creating an order also inserts:
   - order details
   - payment data
@@ -159,17 +171,23 @@ If the database starts empty, the seed inserts:
 - employee resignations
 - monthly profit
 
-It also inserts these login accounts:
+It also inserts these employee accounts:
 
 - `admin`
 - `director`
 - `accountant`
 - `staff`
 
-Default password for all seeded accounts:
+Each seeded account receives:
+
+- a unique password
+- a unique stock access code
+- role-based access to modules
+
+The generated bootstrap credentials are written to:
 
 ```text
-OpenMarket123!
+runtime/initial-access.json
 ```
 
 ## Notes
@@ -178,3 +196,6 @@ OpenMarket123!
 - the runtime is PostgreSQL-first
 - the application is aligned directly to `marketonline.sql`
 - the project has been cleaned so only the current SQL-based runtime remains active
+- the public authentication page is customer-oriented and supports login plus new account registration
+- finance data is visible only to `admin`, `director`, and `accountant`
+- stock check can be opened through a restricted session with an employee access code
