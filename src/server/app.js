@@ -132,14 +132,23 @@ async function handleApiRequest(req, res, parsedUrl) {
   }
 
   if (req.method === "GET" && pathname === "/api/products") {
-    auth.requireModuleAccess(user, "products");
-    sendJson(res, 200, await marketonline.getProductsData());
+    sendJson(res, 200, await marketonline.getProductsData(user));
     return;
   }
 
   if (req.method === "POST" && pathname === "/api/products") {
     auth.requireModuleAccess(user, "products");
     sendJson(res, 200, { product: await marketonline.createProduct(body) });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/cart") {
+    sendJson(res, 200, await marketonline.getCartData(user));
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/cart") {
+    sendJson(res, 200, await marketonline.addCartItem(user, body));
     return;
   }
 

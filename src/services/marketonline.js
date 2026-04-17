@@ -1,7 +1,7 @@
 const { query, withTransaction } = require("../db/client");
 const { HttpError } = require("../utils/errors");
 const { trimString, parseMoney, parseStock, parseDateInput, toNumber } = require("../utils/values");
-const { accessibleModules, canViewFinancials, requireFinancialAccess, requireStockCheckAccess } = require("./auth");
+const { accessibleModules, canViewFinancials, requireCustomerAccount, requireFinancialAccess, requireStockCheckAccess } = require("./auth");
 
 function toInt(value, message) {
   const numeric = Number(value);
@@ -276,40 +276,140 @@ async function getStockCheckData(user, searchText) {
   };
 }
 
-async function getProductsData() {
-  const [productsResult, categorySummaryResult] = await Promise.all([
-    query(`
-      SELECT
-        product_id,
-        product_name,
-        brand,
-        product_type,
-        category,
-        sale_price,
-        stock,
-        description,
-        date_added
-      FROM public.products
-      ORDER BY date_added DESC, product_name ASC
-    `),
-    query(`
-      SELECT
-        category,
-        COUNT(*)::int AS product_count,
-        COALESCE(SUM(stock), 0)::int AS total_stock
-      FROM public.products
-      GROUP BY category
-      ORDER BY category ASC
-    `),
-  ]);
+async function getProductsData(user) {
+  const canManageProducts = Boolean(
+    user &&
+      user.role !== "client" &&
+      accessibleModules(user).some((module) => module.key === "products")
+  );
+
+  const productsResult = await query(`
+    SELECT
+      product_id,
+      product_name,
+      brand,
+      product_type,
+      category,
+      sale_price,
+      stock,
+      description,
+      date_added
+    FROM public.products
+    ORDER BY date_added DESC, product_name ASC
+  `);
+
+  const products = productsResult.rows.map((row) => ({
+    ...row,
+    sale_price: toNumber(row.sale_price) || 0,
+  }));
+
+  if (!canManageProducts) {
+    return {
+      mode: "catalog",
+      products: products.map((row) => ({
+        id: row.product_id,
+        title: row.product_name,
+        brand: row.brand || "No brand",
+        price: row.sale_price,
+      })),
+    };
+  }
+
+  const categorySummaryResult = await query(`
+    SELECT
+      category,
+      COUNT(*)::int AS product_count,
+      COALESCE(SUM(stock), 0)::int AS total_stock,
+      COALESCE(AVG(sale_price), 0)::numeric(10,2) AS average_price
+    FROM public.products
+    GROUP BY category
+    ORDER BY category ASC
+  `);
 
   return {
-    products: productsResult.rows.map((row) => ({
+    mode: "management",
+    products,
+    category_summary: categorySummaryResult.rows.map((row) => ({
       ...row,
-      sale_price: toNumber(row.sale_price) || 0,
+      average_price: toNumber(row.average_price) || 0,
     })),
-    category_summary: categorySummaryResult.rows,
   };
+}
+
+async function getCartData(user) {
+  requireCustomerAccount(user);
+
+  const result = await query(
+    `
+      SELECT
+        cart_items.cart_item_id,
+        cart_items.product_id,
+        cart_items.quantity,
+        products.product_name,
+        products.brand,
+        products.sale_price
+      FROM public.cart_items
+      JOIN public.products ON products.product_id = cart_items.product_id
+      WHERE cart_items.user_id = $1
+      ORDER BY cart_items.updated_at DESC, cart_items.cart_item_id DESC
+    `,
+    [user.user_id]
+  );
+
+  const items = result.rows.map((row) => {
+    const price = toNumber(row.sale_price) || 0;
+    const quantity = Number(row.quantity) || 0;
+    return {
+      cart_item_id: row.cart_item_id,
+      product_id: row.product_id,
+      title: row.product_name,
+      brand: row.brand || "No brand",
+      price,
+      quantity,
+      line_total: Number((price * quantity).toFixed(2)),
+    };
+  });
+
+  return {
+    items,
+    total_items: items.reduce((sum, item) => sum + item.quantity, 0),
+    subtotal: Number(items.reduce((sum, item) => sum + item.line_total, 0).toFixed(2)),
+  };
+}
+
+async function addCartItem(user, payload) {
+  requireCustomerAccount(user);
+
+  const productId = toInt(payload.product_id, "A valid product is required.");
+  const quantity =
+    payload.quantity === undefined || payload.quantity === null || payload.quantity === ""
+      ? 1
+      : toInt(payload.quantity, "Quantity must be a positive integer.");
+
+  const product = await getEntityById("public.products", "product_id", productId);
+  if (!product) {
+    throw new HttpError(404, "Product not found.");
+  }
+
+  await query(
+    `
+      INSERT INTO public.cart_items (
+        user_id,
+        product_id,
+        quantity,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (user_id, product_id)
+      DO UPDATE
+      SET quantity = public.cart_items.quantity + EXCLUDED.quantity,
+          updated_at = NOW()
+    `,
+    [user.user_id, productId, quantity]
+  );
+
+  return getCartData(user);
 }
 
 async function createProduct(payload) {
@@ -1315,6 +1415,8 @@ module.exports = {
   getOverviewData,
   getStockCheckData,
   getProductsData,
+  getCartData,
+  addCartItem,
   createProduct,
   getCustomersData,
   createCustomer,

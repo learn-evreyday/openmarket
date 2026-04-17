@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
-const { hashPassword } = require("../auth/passwords");
+const { hashPassword, verifyPassword } = require("../auth/passwords");
 const { RUNTIME_DIR } = require("../config");
 
 function currentDate(offsetDays = 0) {
@@ -361,17 +361,23 @@ function credentialEnvValue(username, field) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
+function hasSeedPasswordOverrides() {
+  return SEEDED_AUTH_USERS.some((account) => Boolean(credentialEnvValue(account.username, "PASSWORD")));
+}
+
 function buildCredentialBundle() {
   const usedCodes = new Set();
 
   return SEEDED_AUTH_USERS.map((account) => {
-    const password = credentialEnvValue(account.username, "PASSWORD") || randomPassword();
+    const passwordFromEnv = credentialEnvValue(account.username, "PASSWORD");
+    const password = passwordFromEnv || randomPassword();
     const accessCode =
       credentialEnvValue(account.username, "ACCESS_CODE") || randomAccessCode(usedCodes);
 
     return {
       ...account,
       password,
+      password_source: passwordFromEnv ? "env" : "generated",
       access_code: accessCode,
       password_hash: hashPassword(password),
       access_code_hash: hashPassword(accessCode),
@@ -413,6 +419,14 @@ async function writeSeedCredentialsFile(credentials) {
 
   await fs.writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
   console.log(`OpenMarket credentials written to ${outputPath}`);
+}
+
+function logSeedAccountSummary(credentials, mode) {
+  const summary = credentials
+    .map((account) => `${account.username}:${account.role}:${account.password_source}`)
+    .join(", ");
+
+  console.log(`OpenMarket bootstrap accounts ${mode}: ${summary}`);
 }
 
 async function upsertSeededAuthUsers(executor, credentials, employeeMap) {
@@ -459,6 +473,21 @@ async function upsertSeededAuthUsers(executor, credentials, employeeMap) {
 }
 
 function requiresSeedCredentialRefresh(existingRows) {
+  const existingByUsername = new Map(existingRows.map((row) => [String(row.username || "").toLowerCase(), row]));
+  const hasOverrides = hasSeedPasswordOverrides();
+
+  if (hasOverrides) {
+    return SEEDED_AUTH_USERS.some((account) => {
+      const row = existingByUsername.get(account.username);
+      const passwordOverride = credentialEnvValue(account.username, "PASSWORD");
+      if (!row || !passwordOverride) {
+        return !row;
+      }
+
+      return !verifyPassword(passwordOverride, row.password_hash);
+    });
+  }
+
   if (!existingRows.length) {
     return true;
   }
@@ -495,6 +524,7 @@ async function ensureSeededAuthUsers(executor) {
 
   const credentials = buildCredentialBundle();
   await upsertSeededAuthUsers(executor, credentials, employeeAssignmentMap(employeesResult.rows));
+  logSeedAccountSummary(credentials, existingResult.rows.length ? "updated" : "created");
   return credentials;
 }
 

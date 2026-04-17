@@ -623,8 +623,109 @@ async function renderOverviewPage() {
   );
 }
 
+function clientCatalogCard(product) {
+  return `
+    <article class="product-card stack">
+      <div>
+        <h3>${escapeHtml(product.title)}</h3>
+        <div class="subtle">Product #${escapeHtml(product.id)}</div>
+      </div>
+      <div class="product-meta">
+        <span>${escapeHtml(product.brand || "No brand")}</span>
+      </div>
+      <div class="chip-row">
+        <span class="tag">${formatCurrency(product.price)}</span>
+      </div>
+      <button
+        class="button button-primary button-small"
+        type="button"
+        data-action="add-to-cart"
+        data-product-id="${escapeHtml(product.id)}"
+      >
+        Add to cart
+      </button>
+    </article>
+  `;
+}
+
+function cartSummaryCards(cart) {
+  return `
+    <div class="metric-grid">
+      ${metricCard("Cart Items", String(cart.total_items || 0), "Total quantity currently saved in your cart")}
+      ${metricCard("Cart Subtotal", formatCurrency(cart.subtotal || 0), "Running subtotal based on current product prices")}
+    </div>
+  `;
+}
+
+function cartItemsTable(cart) {
+  return createTable(
+    ["Product", "Brand", "Quantity", "Price", "Line Total"],
+    (cart.items || []).map(
+      (item) => `
+        <td>${escapeHtml(item.title)}</td>
+        <td>${escapeHtml(item.brand || "No brand")}</td>
+        <td>${escapeHtml(item.quantity)}</td>
+        <td>${formatCurrency(item.price)}</td>
+        <td>${formatCurrency(item.line_total)}</td>
+      `
+    )
+  );
+}
+
 async function renderProductsPage() {
   const data = await api("/api/products");
+
+  if (data.mode === "catalog") {
+    const cart = state.session.user?.customer_id ? await api("/api/cart") : { items: [], total_items: 0, subtotal: 0 };
+
+    app.innerHTML = pageFrame(
+      "Products",
+      "Browse the catalog and add products to your cart.",
+      `
+        <section class="dashboard-grid">
+          <div class="card stack">
+            ${sectionHeader("Product Catalog", "Available products for your client account.", "products")}
+            <div class="product-grid">
+              ${
+                data.products.length
+                  ? data.products.map((product) => clientCatalogCard(product)).join("")
+                  : emptyState("No products are available right now.")
+              }
+            </div>
+          </div>
+
+          <div class="card stack">
+            ${sectionHeader("Your Cart", "Items added during this session are stored in PostgreSQL for your account.", "orders")}
+            ${cartSummaryCards(cart)}
+            ${cart.items?.length ? cartItemsTable(cart) : emptyState("Your cart is empty.")}
+          </div>
+        </section>
+      `
+    );
+
+    app.querySelectorAll('[data-action="add-to-cart"]').forEach((button) => {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await api("/api/cart", {
+            method: "POST",
+            body: {
+              product_id: button.getAttribute("data-product-id"),
+              quantity: 1,
+            },
+          });
+          setBanner("Product added to cart.", "success");
+          await renderProductsPage();
+        } catch (error) {
+          setBanner(error.message || "Cart update failed.", "error");
+        } finally {
+          button.disabled = false;
+        }
+      });
+    });
+
+    return;
+  }
 
   app.innerHTML = pageFrame(
     "Products",

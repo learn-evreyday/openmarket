@@ -20,7 +20,7 @@ const MODULES = {
 };
 
 const ROLE_MODULES = {
-  client: ["account"],
+  client: ["account", "products"],
   admin: ["dashboard", "products", "customers", "orders", "suppliers", "employees", "service", "finance", "stock_check"],
   director: ["dashboard", "products", "customers", "orders", "suppliers", "employees", "service", "finance", "stock_check"],
   accountant: ["dashboard", "customers", "orders", "finance", "stock_check"],
@@ -309,6 +309,13 @@ function requireModuleAccess(user, moduleKey, customMessage) {
   }
 }
 
+function requireCustomerAccount(user) {
+  requireAuthenticatedUser(user);
+  if (!user.customer_id) {
+    throw new HttpError(403, "A customer account is required for this action.");
+  }
+}
+
 function requireFinancialAccess(user) {
   requireModuleAccess(user, "finance", "You are not allowed to view financial data.");
 }
@@ -328,6 +335,7 @@ module.exports = {
   registerUser,
   loginWithStockAccessCode,
   logoutUser,
+  requireCustomerAccount,
   requireAuthenticatedUser,
   requireFinancialAccess,
   requireModuleAccess,

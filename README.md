@@ -16,7 +16,9 @@ For the complete project specification, architecture plan, and scope details, se
 ## Main Features
 
 - client registration with automatic `client` role assignment
+- deterministic bootstrap employee passwords from environment variables
 - product catalog management
+- client product catalog with add-to-cart flow
 - customer management
 - order creation with multiple order lines
 - payment and delivery recording
@@ -73,6 +75,8 @@ For the complete project specification, architecture plan, and scope details, se
 - `GET /api/overview`
 - `GET /api/products`
 - `POST /api/products`
+- `GET /api/cart`
+- `POST /api/cart`
 - `GET /api/customers`
 - `POST /api/customers`
 - `GET /api/orders`
@@ -115,6 +119,10 @@ Example configuration:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/marketonline
 PGSSLMODE=disable
 PORT=8000
+OPENMARKET_ADMIN_PASSWORD=ChangeThisAdminPassword
+OPENMARKET_DIRECTOR_PASSWORD=ChangeThisDirectorPassword
+OPENMARKET_ACCOUNTANT_PASSWORD=ChangeThisAccountantPassword
+OPENMARKET_STAFF_PASSWORD=ChangeThisStaffPassword
 ```
 
 ## How to Run
@@ -180,7 +188,8 @@ It also inserts these employee accounts:
 
 Each seeded account receives:
 
-- a unique password
+- a fixed password if the corresponding `OPENMARKET_<ROLE>_PASSWORD` environment variable is set
+- otherwise a generated password
 - a unique stock access code
 - role-based access to modules
 
@@ -197,5 +206,8 @@ runtime/initial-access.json
 - the application is aligned directly to `marketonline.sql`
 - the project has been cleaned so only the current SQL-based runtime remains active
 - the public authentication page is customer-oriented and supports login plus new account registration
+- Render should define `OPENMARKET_ADMIN_PASSWORD`, `OPENMARKET_DIRECTOR_PASSWORD`, `OPENMARKET_ACCOUNTANT_PASSWORD`, and `OPENMARKET_STAFF_PASSWORD` so seeded employee logins stay predictable in production
+- `/api/products` returns a client-safe catalog for guest and client sessions, while employee product management remains available to internal product roles
+- `/api/cart` stores cart items in PostgreSQL for authenticated customer accounts
 - finance data is visible only to `admin`, `director`, and `accountant`
 - stock check can be opened through a restricted session with an employee access code
